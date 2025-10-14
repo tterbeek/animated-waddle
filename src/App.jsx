@@ -46,6 +46,12 @@ export default function App() {
     if (playerInputRef.current) playerInputRef.current.focus();
   };
 
+  // ===== Remove player from pool =====
+  const removePlayer = (name) => {
+    setPlayerPool(playerPool.filter((p) => p.name !== name));
+    setPlayers(players.filter((p) => p.name !== name));
+  };
+
   // ===== Submit turn logic =====
   const submitTurn = (e) => {
     if (e) e.preventDefault();
@@ -103,6 +109,15 @@ export default function App() {
     setCurrentPlayerIndex(0);
   };
 
+  // ===== Start new game button during gameplay =====
+  const startNewGame = () => {
+    setGameStarted(false);
+    setPlayers([]); // clear current game
+    setLastScore(0);
+    setRound(1);
+    setDarts(["", "", ""]);
+  };
+
   return (
     <div
       style={{
@@ -135,7 +150,7 @@ export default function App() {
             <button onClick={addPlayer}>Add Player</button>
           </div>
 
-          {/* Player pool with checkboxes */}
+          {/* Player pool with checkboxes and remove buttons */}
           <h3>Player Pool</h3>
           {playerPool.length === 0 && <p>No players yet</p>}
           <ul>
@@ -157,6 +172,12 @@ export default function App() {
                   />{" "}
                   {p.name}
                 </label>
+                <button
+                  onClick={() => removePlayer(p.name)}
+                  style={{ marginLeft: "10px" }}
+                >
+                  Remove
+                </button>
               </li>
             ))}
           </ul>
@@ -216,6 +237,14 @@ export default function App() {
           <p>
             <strong>Score to beat:</strong> {lastScore}
           </p>
+
+          {/* New Game button */}
+          <button
+            onClick={startNewGame}
+            style={{ marginTop: "20px", backgroundColor: "#f0f0f0" }}
+          >
+            Start New Game
+          </button>
         </div>
       )}
     </div>
