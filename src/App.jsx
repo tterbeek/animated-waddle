@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
 
 export default function App() {
-  const [players, setPlayers] = useState([]);
+  // ===== States =====
+  const [playerPool, setPlayerPool] = useState([]); // all saved players
+  const [players, setPlayers] = useState([]); // active players for current game
   const [playerName, setPlayerName] = useState("");
   const [gameStarted, setGameStarted] = useState(false);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
@@ -13,22 +15,38 @@ export default function App() {
   const dartRefs = [useRef(null), useRef(null), useRef(null)];
   const playerInputRef = useRef(null);
 
-  // focus first dart input when player's turn starts
+  // ===== Load & Save Player Pool to localStorage =====
+  useEffect(() => {
+    const savedPlayers = JSON.parse(localStorage.getItem("playerPool") || "[]");
+    setPlayerPool(savedPlayers);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("playerPool", JSON.stringify(playerPool));
+  }, [playerPool]);
+
+  // ===== Focus first dart input on player's turn =====
   useEffect(() => {
     if (gameStarted && dartRefs[0].current) {
       dartRefs[0].current.focus();
     }
   }, [currentPlayerIndex, gameStarted]);
 
-  // add player helper
+  // ===== Add new player to pool =====
   const addPlayer = () => {
-    if (!playerName.trim()) return;
-    setPlayers([...players, { name: playerName.trim(), lives: 3, score: 0 }]);
-    setPlayerName(""); // clear field
-    if (playerInputRef.current) playerInputRef.current.focus(); // refocus input
+    const trimmedName = playerName.trim();
+    if (!trimmedName) return;
+
+    // add to pool if not exists
+    if (!playerPool.some((p) => p.name === trimmedName)) {
+      setPlayerPool([...playerPool, { name: trimmedName }]);
+    }
+
+    setPlayerName(""); // clear input
+    if (playerInputRef.current) playerInputRef.current.focus();
   };
 
-  // submit turn helper
+  // ===== Submit turn logic =====
   const submitTurn = (e) => {
     if (e) e.preventDefault();
 
@@ -73,13 +91,25 @@ export default function App() {
     setDarts(["", "", ""]);
   };
 
+  // ===== Start game with selected players =====
+  const startGame = () => {
+    if (players.length < 2) return;
+    const initializedPlayers = players.map((p) => ({ ...p, lives: 3, score: 0 }));
+    setPlayers(initializedPlayers);
+    setGameStarted(true);
+    setLastScore(0);
+    setRound(1);
+    setDarts(["", "", ""]);
+    setCurrentPlayerIndex(0);
+  };
+
   return (
     <div
       style={{
-        minHeight: "100vh",             // full viewport height
+        minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "flex-start",  // align content at top
+        justifyContent: "flex-start",
         padding: "20px",
         fontFamily: "Arial",
       }}
@@ -90,33 +120,49 @@ export default function App() {
         // =======================
         <div>
           <h2>Setup Players</h2>
-          <input
-            ref={playerInputRef}
-            type="text"
-            placeholder="Player name"
-            value={playerName}
-            onChange={(e) => setPlayerName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addPlayer()}
-          />
-          <button onClick={addPlayer}>Add Player</button>
 
+          {/* Add new player */}
+          <div>
+            <input
+              ref={playerInputRef}
+              type="text"
+              placeholder="New player name"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addPlayer()}
+              style={{ marginRight: "5px" }}
+            />
+            <button onClick={addPlayer}>Add Player</button>
+          </div>
+
+          {/* Player pool with checkboxes */}
+          <h3>Player Pool</h3>
+          {playerPool.length === 0 && <p>No players yet</p>}
           <ul>
-            {players.map((p, i) => (
-              <li
-                key={i}
-                style={{
-                  textDecoration: p.lives <= 0 ? "line-through" : "none",
-                }}
-              >
-                {p.name} - Lives: {p.lives} - Last Score: {p.score}
+            {playerPool.map((p, i) => (
+              <li key={i}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={players.some((player) => player.name === p.name)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setPlayers([...players, { ...p, lives: 3, score: 0 }]);
+                      } else {
+                        setPlayers(
+                          players.filter((player) => player.name !== p.name)
+                        );
+                      }
+                    }}
+                  />{" "}
+                  {p.name}
+                </label>
               </li>
             ))}
           </ul>
 
-          <button
-            onClick={() => setGameStarted(true)}
-            disabled={players.length < 2}
-          >
+          {/* Start game button */}
+          <button onClick={startGame} disabled={players.length < 2}>
             Start Game
           </button>
         </div>
@@ -136,7 +182,7 @@ export default function App() {
           </h3>
 
           <form onSubmit={submitTurn}>
-            <p>Enter scores for 3 darts (number 0–60 or "bull"):</p>
+            <p>Enter scores for 3 darts (0–60 or "bull"):</p>
             {darts.map((dart, i) => (
               <input
                 key={i}
@@ -144,17 +190,9 @@ export default function App() {
                 type="text"
                 value={dart}
                 onChange={(e) =>
-                  setDarts(
-                    darts.map((d, idx) =>
-                      idx === i ? e.target.value : d
-                    )
-                  )
+                  setDarts(darts.map((d, idx) => (idx === i ? e.target.value : d)))
                 }
-                style={{
-                  marginRight: "5px",
-                  width: "70px",
-                  textAlign: "center",
-                }}
+                style={{ marginRight: "5px", width: "70px", textAlign: "center" }}
               />
             ))}
             <button type="submit">Submit Turn</button>
@@ -166,12 +204,8 @@ export default function App() {
               <li
                 key={i}
                 style={{
-                  textDecoration:
-                    p.lives <= 0 ? "line-through" : "none",
-                  color:
-                    i === currentPlayerIndex && p.lives > 0
-                      ? "green"
-                      : "black",
+                  textDecoration: p.lives <= 0 ? "line-through" : "none",
+                  color: i === currentPlayerIndex && p.lives > 0 ? "green" : "black",
                 }}
               >
                 {p.name} – Lives: {p.lives} – Last Score: {p.score}
