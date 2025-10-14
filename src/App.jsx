@@ -13,22 +13,22 @@ export default function App() {
   const dartRefs = [useRef(null), useRef(null), useRef(null)];
   const playerInputRef = useRef(null);
 
-  // focus first dart when new player's turn starts
+  // focus first dart input when player's turn starts
   useEffect(() => {
     if (gameStarted && dartRefs[0].current) {
       dartRefs[0].current.focus();
     }
   }, [currentPlayerIndex, gameStarted]);
 
-  // helper: add player and refocus input
+  // add player helper
   const addPlayer = () => {
     if (!playerName.trim()) return;
     setPlayers([...players, { name: playerName.trim(), lives: 3, score: 0 }]);
-    setPlayerName("");
-    if (playerInputRef.current) playerInputRef.current.focus();
+    setPlayerName(""); // clear field
+    if (playerInputRef.current) playerInputRef.current.focus(); // refocus input
   };
 
-  // helper: handle dart scoring
+  // submit turn helper
   const submitTurn = (e) => {
     if (e) e.preventDefault();
 
@@ -41,7 +41,6 @@ export default function App() {
 
     const bullseyes = darts.filter((d) => d.toLowerCase() === "bull").length;
 
-    // add lives for bulls, lose one if under target
     currentPlayer.lives += bullseyes;
     if (score < lastScore) currentPlayer.lives -= 1;
     currentPlayer.score = score;
@@ -75,7 +74,16 @@ export default function App() {
   };
 
   return (
-    <div style={{ padding: "20px", fontFamily: "Arial" }}>
+    <div
+      style={{
+        minHeight: "100vh",             // full viewport height
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-start",  // align content at top
+        padding: "20px",
+        fontFamily: "Arial",
+      }}
+    >
       {!gameStarted ? (
         // =======================
         // SETUP PLAYERS VIEW
