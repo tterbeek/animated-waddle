@@ -1,5 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 
+import useAudioLooper from "./useAudioLooper";
+
+
+
+
+
+
 export default function App() {
   // ===== States =====
   const [playerPool, setPlayerPool] = useState([]); // all saved players
@@ -12,11 +19,22 @@ export default function App() {
   const [round, setRound] = useState(1);
   const [previousState, setPreviousState] = useState(null); // for undo
   const [winner, setWinner] = useState(null); // for winner screen
+  const [audioStarted, setAudioStarted] = useState(false);
+
+  // ===== Audio hook (inside the component) =====
+  const [fullRef, loopRef] = useAudioLooper(
+    "/fulltitlesong.mp3",
+    "/looptitlesong.mp3",
+    gameStarted, // stops audio when game starts
+    10 // fade duration in seconds
+  );
+
+
 
   // refs
   const dartRefs = [useRef(null), useRef(null), useRef(null)];
   const playerInputRef = useRef(null);
-
+  
   // ===== Load & Save Player Pool =====
   useEffect(() => {
     try {
@@ -176,6 +194,17 @@ export default function App() {
       >
         <h1 style={{ fontSize: "2.5rem", marginBottom: 8 }}>🎯 {winner.name} Wins! 🎉</h1>
         <p style={{ fontSize: "1.5rem", marginTop: 6 }}>{renderHearts(winner.lives)}</p>
+
+    {/* Winner video */}
+    <video
+      src="/winner.mp4"
+      autoPlay
+      loop={false}
+      muted={false}
+      style={{ maxWidth: "90%", marginTop: 20, borderRadius: 8 }}
+    />
+
+
         <button
           onClick={startNewGame}
           style={{
@@ -272,6 +301,10 @@ export default function App() {
               Start Game
             </button>
           </div>
+          {/* Audio Elements */}
+          <audio ref={fullRef} src="/fulltitlesong.mp3" preload="auto" />
+          <audio ref={loopRef} src="/looptitlesong.mp3" preload="auto" loop />
+
         </div>
       ) : (
         // ===== Game View =====
