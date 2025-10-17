@@ -20,14 +20,18 @@ export default function App() {
   const [previousState, setPreviousState] = useState(null); // for undo
   const [winner, setWinner] = useState(null); // for winner screen
   const [audioStarted, setAudioStarted] = useState(false);
+  const [splashPlayed, setSplashPlayed] = useState(false);
+
+
 
   // ===== Audio hook (inside the component) =====
   const [fullRef, loopRef] = useAudioLooper(
     "/fulltitlesong.mp3",
     "/looptitlesong.mp3",
-    gameStarted, // stops audio when game starts
-    10 // fade duration in seconds
+    gameStarted || !splashPlayed, // stop music if game starts
+    10
   );
+
 
 
 
@@ -220,6 +224,37 @@ export default function App() {
       </div>
     );
   }
+
+if (!splashPlayed) {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        fontFamily: "Arial",
+        backgroundColor: "#fff",
+      }}
+    >
+      <button
+        onClick={() => setSplashPlayed(true)}
+        style={{
+          fontSize: "1.5rem",
+          padding: "12px 24px",
+          cursor: "pointer",
+          borderRadius: 6,
+        }}
+      >
+        ▶️ Play
+      </button>
+      {/* Hidden audio elements to be controlled by useAudioLooper */}
+      <audio ref={fullRef} src="/fulltitlesong.mp3" preload="auto" />
+      <audio ref={loopRef} src="/looptitlesong.mp3" preload="auto" loop />
+    </div>
+  );
+}
+
 
   // ===== Main Render =====
   return (
