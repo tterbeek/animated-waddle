@@ -14,6 +14,8 @@ export default function App() {
   const [winner, setWinner] = useState(null); // for winner screen
   const [isMuted, setIsMuted] = useState(true);
   const audioRef = useRef(null);
+  const [multiplier, setMultiplier] = useState(1);
+  const [currentDart, setCurrentDart] = useState(0);
 
 
 
@@ -97,6 +99,37 @@ const toggleMute = () => {
     setPlayers(players.filter((p) => p.name !== name));
   };
 
+
+  // ===== Keypad logic =====  
+  const handleKeypadPress = (value) => {
+    let dartValue = "";
+
+    if (value === "Bull") {
+      dartValue = "bull";
+    } else if (typeof value === "number") {
+      dartValue = value * multiplier;
+    }
+
+    const newDarts = [...darts];
+    newDarts[currentDart] = dartValue.toString();
+    setDarts(newDarts);
+
+    // Reset multiplier after each dart
+    setMultiplier(1);
+
+    // Move to next dart if available
+    if (currentDart < 2) {
+      setCurrentDart(currentDart + 1);
+    }
+  };
+
+  const selectDouble = () => setMultiplier(2);
+  const selectTriple = () => setMultiplier(3);
+
+
+
+
+
   // ===== Start Game =====
   const startGame = () => {
     if (players.length < 2) return;
@@ -160,6 +193,10 @@ const toggleMute = () => {
     setCurrentPlayerIndex(next);
     if (next === 0) setRound((r) => r + 1);
     setDarts(["", "", ""]);
+
+    setCurrentDart(0);
+    setMultiplier(1);
+
   };
 
   // ===== Undo Turn =====
@@ -173,6 +210,9 @@ const toggleMute = () => {
     setPreviousState(null);
     setWinner(null);
     setGameStarted(true);
+    setCurrentDart(0);
+    setMultiplier(1);
+
   };
 
   // ===== Start New Game =====
@@ -363,6 +403,81 @@ const toggleMute = () => {
               Submit Turn
             </button>
           </form>
+
+         {/* Keypad scoring */}
+<p>Entering dart {currentDart + 1} of 3</p>
+
+<div style={{ marginTop: 20, textAlign: "center" }}>
+  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "8px" }}>
+    {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map((num) => (
+      <button
+        key={num}
+        onClick={() => handleKeypadPress(num)}
+        style={{
+          padding: "10px",
+          fontSize: "1.1rem",
+          cursor: "pointer",
+        }}
+      >
+        {num}
+      </button>
+    ))}
+  </div>
+{/* Bottom row of special buttons */}
+<div
+  style={{
+    marginTop: 12,
+    display: "grid",
+    gridTemplateColumns: "repeat(4, 1fr)",
+    gap: "8px",
+  }}
+>
+  <button
+    onClick={() => handleKeypadPress(25)}
+    style={{
+      padding: "12px 0",
+      fontSize: "1rem",
+      cursor: "pointer",
+    }}
+  >
+    Outer Bull
+  </button>
+  <button
+    onClick={() => handleKeypadPress("Bull")}
+    style={{
+      padding: "12px 0",
+      fontSize: "1rem",
+      cursor: "pointer",
+    }}
+  >
+    Bull
+  </button>
+  <button
+    onClick={selectDouble}
+    style={{
+      padding: "12px 0",
+      fontSize: "1rem",
+      cursor: "pointer",
+      background: multiplier === 2 ? "#d0f0d0" : "#f0f0f0",
+    }}
+  >
+    Double
+  </button>
+  <button
+    onClick={selectTriple}
+    style={{
+      padding: "12px 0",
+      fontSize: "1rem",
+      cursor: "pointer",
+      background: multiplier === 3 ? "#d0f0d0" : "#f0f0f0",
+    }}
+  >
+    Triple
+  </button>
+</div>
+</div>
+
+
 
           {/* Player Status */}
           <h3 style={{ marginTop: 18 }}>Player Status</h3>
