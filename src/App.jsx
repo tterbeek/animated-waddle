@@ -1,12 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
 
-import useAudioLooper from "./useAudioLooper";
-
-
-
-
-
-
 export default function App() {
   // ===== States =====
   const [playerPool, setPlayerPool] = useState([]); // all saved players
@@ -19,19 +12,8 @@ export default function App() {
   const [round, setRound] = useState(1);
   const [previousState, setPreviousState] = useState(null); // for undo
   const [winner, setWinner] = useState(null); // for winner screen
-  const [audioStarted, setAudioStarted] = useState(false);
-  const [splashPlayed, setSplashPlayed] = useState(false);
-
-
-
-  // ===== Audio hook (inside the component) =====
-  const [fullRef, loopRef] = useAudioLooper(
-    "/fulltitlesong.mp3",
-    "/looptitlesong.mp3",
-    gameStarted || !splashPlayed, // stop music if game starts
-    10
-  );
-
+  const [isMuted, setIsMuted] = useState(true);
+  const audioRef = useRef(null);
 
 
 
@@ -53,6 +35,20 @@ export default function App() {
     localStorage.setItem("playerPool", JSON.stringify(playerPool));
   }, [playerPool]);
 
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      if (audioRef.current && audioRef.current.paused) {
+        audioRef.current.play().catch(() => {});
+      }
+      document.removeEventListener("click", handleFirstInteraction);
+    };
+    document.addEventListener("click", handleFirstInteraction);
+    return () => document.removeEventListener("click", handleFirstInteraction);
+  }, []);
+
+
+
+  
   // ===== Focus first dart input =====
   useEffect(() => {
     if (gameStarted && dartRefs[0].current) {
@@ -69,6 +65,21 @@ export default function App() {
     }
     return shuffled;
   };
+
+
+  // ===== Mute function =====
+const toggleMute = () => {
+  if (audioRef.current) {
+    audioRef.current.muted = !audioRef.current.muted;
+    setIsMuted(audioRef.current.muted);
+  }
+};
+
+
+
+
+
+
 
   // ===== Add / Remove Player =====
   const addPlayer = () => {
@@ -199,15 +210,13 @@ export default function App() {
         <h1 style={{ fontSize: "2.5rem", marginBottom: 8 }}>🎯 {winner.name} Wins! 🎉</h1>
         <p style={{ fontSize: "1.5rem", marginTop: 6 }}>{renderHearts(winner.lives)}</p>
 
-    {/* Winner video */}
-    <video
-      src="/winner.mp4"
-      autoPlay
-      loop={false}
-      muted={false}
-      style={{ maxWidth: "90%", marginTop: 20, borderRadius: 8 }}
-    />
-
+        <video
+          src="/winner.mp4"
+          autoPlay
+          loop={false}
+          muted={false}
+          style={{ maxWidth: "90%", marginTop: 20, borderRadius: 8 }}
+        />
 
         <button
           onClick={startNewGame}
@@ -225,37 +234,6 @@ export default function App() {
     );
   }
 
-if (!splashPlayed) {
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        fontFamily: "Arial",
-        backgroundColor: "#fff",
-      }}
-    >
-      <button
-        onClick={() => setSplashPlayed(true)}
-        style={{
-          fontSize: "1.5rem",
-          padding: "12px 24px",
-          cursor: "pointer",
-          borderRadius: 6,
-        }}
-      >
-        ▶️ Play
-      </button>
-      {/* Hidden audio elements to be controlled by useAudioLooper */}
-      <audio ref={fullRef} src="/fulltitlesong.mp3" preload="auto" />
-      <audio ref={loopRef} src="/looptitlesong.mp3" preload="auto" loop />
-    </div>
-  );
-}
-
-
   // ===== Main Render =====
   return (
     <div
@@ -268,6 +246,27 @@ if (!splashPlayed) {
         fontFamily: "Arial",
       }}
     >
+
+    <button
+      onClick={toggleMute}
+      style={{
+        backgroundColor: "#e0e0e0",
+        padding: "10px 18px",
+        borderRadius: "6px",
+        border: "1px solid #ccc",
+        cursor: "pointer",
+        fontWeight: "bold",
+        position: "fixed",
+        top: 15,
+        right: 15,
+        zIndex: 1000,
+      }}
+    >
+      {isMuted ? "🔇 Unmute" : "🔊 Mute"}
+    </button>
+
+
+
       {!gameStarted ? (
         // ===== Setup View =====
         <div>
@@ -336,10 +335,6 @@ if (!splashPlayed) {
               Start Game
             </button>
           </div>
-          {/* Audio Elements */}
-          <audio ref={fullRef} src="/fulltitlesong.mp3" preload="auto" />
-          <audio ref={loopRef} src="/looptitlesong.mp3" preload="auto" loop />
-
         </div>
       ) : (
         // ===== Game View =====
@@ -455,6 +450,8 @@ if (!splashPlayed) {
           </div>
         </div>
       )}
+    <audio ref={audioRef} src="/fulltitlesong.mp3" preload="auto" loop muted/>
+
     </div>
   );
 }
