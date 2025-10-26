@@ -37,18 +37,26 @@ export default function App() {
     localStorage.setItem("playerPool", JSON.stringify(playerPool));
   }, [playerPool]);
 
-  useEffect(() => {
+useEffect(() => {
   const handleFirstInteraction = () => {
     if (audioRef.current) {
-      audioRef.current.muted = true; // start muted
-      audioRef.current.play().catch(() => {});
+      try {
+        audioRef.current.muted = true;
+        setIsMuted(true);
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {});
+        }
+      } catch (err) {
+        console.warn("Audio play failed on first interaction:", err);
+      }
     }
     document.removeEventListener("click", handleFirstInteraction);
   };
+
   document.addEventListener("click", handleFirstInteraction);
   return () => document.removeEventListener("click", handleFirstInteraction);
 }, []);
-
 
 
 
@@ -71,22 +79,23 @@ export default function App() {
   };
 
 
-  // ===== Mute function =====
+// ===== Mute / Unmute function =====
 const toggleMute = () => {
   if (audioRef.current) {
-    const wasMuted = audioRef.current.muted;
-    audioRef.current.muted = !wasMuted;
-    setIsMuted(audioRef.current.muted);
+    const newMutedState = !isMuted;
+    audioRef.current.muted = newMutedState;
+    setIsMuted(newMutedState);
 
-    // Try to play audio after unmuting
-    if (!audioRef.current.muted) {
-      audioRef.current
-        .play()
-        .then(() => console.log("🎵 Music playing"))
-        .catch((err) => console.log("⚠️ Audio play blocked:", err));
+    if (!newMutedState) {
+      // unmuting: ensure playback resumes
+      audioRef.current.play().catch((err) => {
+        console.warn("Audio play failed after unmute:", err);
+      });
     }
   }
 };
+
+
 
 
 
@@ -256,18 +265,19 @@ const startNewGame = () => {
   // ===== Winner Screen =====
   if (winner) {
     return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-          fontFamily: "Arial",
-          backgroundColor: "#fff",
-          padding: 20,
-        }}
-      >
+          <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-start", // 👈 top align
+        alignItems: "center",
+        fontFamily: "Arial",
+        backgroundColor: "#fff",
+        padding: "40px 20px", // extra top padding for spacing
+      }}
+    >
+
         <h1 style={{ fontSize: "2.5rem", marginBottom: 8 }}>🎯 {winner.name} Wins! 🎉</h1>
         <p style={{ fontSize: "1.5rem", marginTop: 6 }}>{renderHearts(winner.lives)}</p>
 
@@ -502,10 +512,16 @@ return (
       </div>
         </div>
 
-        {/* Audio element */}
-        <audio ref={audioRef} src="/fulltitlesong.mp3" preload="auto" loop />
       </>
     )}
-  </div>
+  {/* Audio element — always present */}
+  <audio
+    ref={audioRef}
+    src="/fulltitlesong.mp3"
+    preload="auto"
+    loop
+    muted={isMuted}
+  />
+</div>
 );
 }
