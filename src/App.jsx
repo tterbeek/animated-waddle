@@ -38,15 +38,17 @@ export default function App() {
   }, [playerPool]);
 
   useEffect(() => {
-    const handleFirstInteraction = () => {
-      if (audioRef.current && audioRef.current.paused) {
-        audioRef.current.play().catch(() => {});
-      }
-      document.removeEventListener("click", handleFirstInteraction);
-    };
-    document.addEventListener("click", handleFirstInteraction);
-    return () => document.removeEventListener("click", handleFirstInteraction);
-  }, []);
+  const handleFirstInteraction = () => {
+    if (audioRef.current) {
+      audioRef.current.muted = true; // start muted
+      audioRef.current.play().catch(() => {});
+    }
+    document.removeEventListener("click", handleFirstInteraction);
+  };
+  document.addEventListener("click", handleFirstInteraction);
+  return () => document.removeEventListener("click", handleFirstInteraction);
+}, []);
+
 
 
 
@@ -72,8 +74,17 @@ export default function App() {
   // ===== Mute function =====
 const toggleMute = () => {
   if (audioRef.current) {
-    audioRef.current.muted = !audioRef.current.muted;
+    const wasMuted = audioRef.current.muted;
+    audioRef.current.muted = !wasMuted;
     setIsMuted(audioRef.current.muted);
+
+    // Try to play audio after unmuting
+    if (!audioRef.current.muted) {
+      audioRef.current
+        .play()
+        .then(() => console.log("🎵 Music playing"))
+        .catch((err) => console.log("⚠️ Audio play blocked:", err));
+    }
   }
 };
 
@@ -216,15 +227,25 @@ const toggleMute = () => {
   };
 
   // ===== Start New Game =====
-  const startNewGame = () => {
-    setGameStarted(false);
-    setPlayers([]);
-    setLastScore(0);
-    setRound(1);
-    setDarts(["", "", ""]);
-    setPreviousState(null);
-    setWinner(null);
-  };
+const startNewGame = () => {
+  // If a game is currently running, ask for confirmation
+  if (gameStarted) {
+    const confirmRestart = window.confirm(
+      "Are you sure you want to restart and lose current game data?"
+    );
+    if (!confirmRestart) return; // cancel if user says no
+  }
+
+  // Reset all game states
+  setGameStarted(false);
+  setPlayers([]);
+  setLastScore(0);
+  setRound(1);
+  setDarts(["", "", ""]);
+  setPreviousState(null);
+  setWinner(null);
+};
+
 
   // ===== Heart display (up to 6) =====
   const renderHearts = (lives) => {
@@ -251,10 +272,11 @@ const toggleMute = () => {
         <p style={{ fontSize: "1.5rem", marginTop: 6 }}>{renderHearts(winner.lives)}</p>
 
         <video
-          src="/winner.mp4"
+          src="/lucaswinner.mp4"
           autoPlay
           loop={false}
           muted={false}
+          controls
           style={{ maxWidth: "90%", marginTop: 20, borderRadius: 8 }}
         />
 
@@ -274,19 +296,20 @@ const toggleMute = () => {
     );
   }
 
-  // ===== Main Render =====
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "flex-start",
-        padding: "20px",
-        fontFamily: "Arial",
-      }}
-    >
 
+
+// ===== Main Render =====
+return (
+  <div
+    style={{
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "flex-start",
+      padding: "20px",
+      fontFamily: "Arial",
+    }}
+  >
     <button
       onClick={toggleMute}
       style={{
@@ -305,10 +328,10 @@ const toggleMute = () => {
       {isMuted ? "🔇 Unmute" : "🔊 Mute"}
     </button>
 
-
-
-      {!gameStarted ? (
-        // ===== Setup View =====
+    {!gameStarted ? (
+      // ===== Setup View =====
+      <div>
+        {/* setup content here */}
         <div>
           <h2>Setup Players</h2>
 
@@ -376,197 +399,113 @@ const toggleMute = () => {
             </button>
           </div>
         </div>
-      ) : (
-        // ===== Game View =====
-        <div>
-          <h2>Darts Game</h2>
-          <h3>Round {round}</h3>
-          <h3>
-            Current Player:{" "}
-            <span style={{ fontWeight: "bold" }}>{players[currentPlayerIndex].name}</span>{" "}
-            (Lives: {players[currentPlayerIndex].lives})
-          </h3>
 
-          <form onSubmit={submitTurn} style={{ marginTop: 10 }}>
-            <p>Enter scores for 3 darts (0–60 or "bull"):</p>
-            {darts.map((dart, i) => (
-              <input
+      </div>
+    ) : (
+      // ===== Game View =====
+      <>
+        <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
+          {/* left and right columns here */}
+                {/* Left Column: Player Status */}
+      <div style={{ flex: 1, minWidth: 250 }}>
+        <h2>Darts Game</h2>
+        <h3 style={{ marginTop: 12 }}>Player Status</h3>
+        <ul style={{ listStyle: "none", padding: 0, marginTop: 10 }}>
+          {players.map((p, i) => {
+            const isCurrent = i === currentPlayerIndex && p.lives > 0;
+            const isDead = p.lives <= 0;
+            return (
+              <li
                 key={i}
-                ref={dartRefs[i]}
-                type="text"
-                value={dart}
-                onChange={(e) => setDarts(darts.map((d, idx) => (idx === i ? e.target.value : d)))}
-                style={{ marginRight: "6px", width: "70px", textAlign: "center", padding: "6px 4px" }}
-              />
-            ))}
-            <button type="submit" style={{ padding: "8px 12px", cursor: "pointer" }}>
-              Submit Turn
-            </button>
-          </form>
-
-         {/* Keypad scoring */}
-<p>Entering dart {currentDart + 1} of 3</p>
-
-<div style={{ marginTop: 20, textAlign: "center" }}>
-  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "8px" }}>
-    {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map((num) => (
-      <button
-        key={num}
-        onClick={() => handleKeypadPress(num)}
-        style={{
-          padding: "10px",
-          fontSize: "1.1rem",
-          cursor: "pointer",
-        }}
-      >
-        {num}
-      </button>
-    ))}
-  </div>
-{/* Bottom row of special buttons */}
-<div
-  style={{
-    marginTop: 12,
-    display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: "8px",
-  }}
->
-  <button
-    onClick={() => handleKeypadPress(25)}
-    style={{
-      padding: "12px 0",
-      fontSize: "1rem",
-      cursor: "pointer",
-    }}
-  >
-    Outer Bull
-  </button>
-  <button
-    onClick={() => handleKeypadPress("Bull")}
-    style={{
-      padding: "12px 0",
-      fontSize: "1rem",
-      cursor: "pointer",
-    }}
-  >
-    Bull
-  </button>
-  <button
-    onClick={selectDouble}
-    style={{
-      padding: "12px 0",
-      fontSize: "1rem",
-      cursor: "pointer",
-      background: multiplier === 2 ? "#d0f0d0" : "#f0f0f0",
-    }}
-  >
-    Double
-  </button>
-  <button
-    onClick={selectTriple}
-    style={{
-      padding: "12px 0",
-      fontSize: "1rem",
-      cursor: "pointer",
-      background: multiplier === 3 ? "#d0f0d0" : "#f0f0f0",
-    }}
-  >
-    Triple
-  </button>
-</div>
-</div>
-
-
-
-          {/* Player Status */}
-          <h3 style={{ marginTop: 18 }}>Player Status</h3>
-          <ul style={{ listStyle: "none", padding: 0, marginTop: 10 }}>
-            {players.map((p, i) => {
-              const isCurrent = i === currentPlayerIndex && p.lives > 0;
-              const isDead = p.lives <= 0;
-              return (
-                <li
-                  key={i}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    backgroundColor: isCurrent ? "rgba(144,238,144,0.35)" : "transparent",
-                    textDecoration: isDead ? "line-through" : "none",
-                    color: isDead ? "#999" : isCurrent ? "#006400" : "#000",
-                    fontWeight: isCurrent ? "bold" : "normal",
-                    marginBottom: "6px",
-                    padding: "8px",
-                    borderRadius: 6,
-                    transition: "background-color 0.25s ease",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  {/* Name column */}
-                  <span style={{ width: "150px", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
-
-                  {/* Hearts column */}
-                  <span style={{ width: "150px", textAlign: "center" }}>{p.lives > 0 ? renderHearts(p.lives) : ""}</span>
-
-                  {/* Score column */}
-                  <span style={{ width: "150px", textAlign: "right" }}>Score: {p.score}</span>
-                </li>
-              );
-            })}
-          </ul>
-
-          {/* Score to beat line */}
-          <p style={{ marginTop: "10px", fontSize: "16px" }}>
-            <strong>Score to beat:</strong> {lastScore}
-          </p>
-
-          {/* Buttons below player list */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              gap: "15px",
-              marginTop: "25px",
-            }}
-          >
-            {/* Undo button (only shows if undo is available) */}
-            {previousState && (
-              <button
-                onClick={undoTurn}
                 style={{
-                  backgroundColor: "#fff3b0",
-                  padding: "10px 18px",
-                  borderRadius: "6px",
-                  border: "1px solid #ccc",
-                  cursor: "pointer",
-                  fontWeight: "bold",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  backgroundColor: isCurrent ? "rgba(144,238,144,0.35)" : "transparent",
+                  textDecoration: isDead ? "line-through" : "none",
+                  color: isDead ? "#999" : isCurrent ? "#006400" : "#000",
+                  fontWeight: isCurrent ? "bold" : "normal",
+                  marginBottom: "6px",
+                  padding: "8px",
+                  borderRadius: 6,
+                  transition: "background-color 0.25s ease",
+                  fontFamily: "monospace",
                 }}
               >
-                ⬅️ Undo Last Turn
-              </button>
-            )}
+                <span style={{ width: "150px", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+                <span style={{ width: "150px", textAlign: "center" }}>{p.lives > 0 ? renderHearts(p.lives) : ""}</span>
+                <span style={{ width: "150px", textAlign: "right" }}>Score: {p.score}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+            {/* Right Column */}
+      <div style={{ flex: 1, minWidth: 300 }}>
+        <h3>Round {round}</h3>
+        <h3>
+          Current Player: <span style={{ fontWeight: "bold" }}>{players[currentPlayerIndex].name}</span> (Lives: {players[currentPlayerIndex].lives})
+        </h3>
 
-            {/* Start new game button */}
-            <button
-              onClick={startNewGame}
-              style={{
-                backgroundColor: "#e0e0e0",
-                padding: "10px 18px",
-                borderRadius: "6px",
-                border: "1px solid #ccc",
-                cursor: "pointer",
-                fontWeight: "bold",
-              }}
-            >
-              🔄 Start New Game
-            </button>
+        {/* Score to Beat */}
+        <p style={{ marginTop: "10px", fontSize: "16px" }}>
+          <strong>Score to beat:</strong> {lastScore}
+        </p>
+
+        {/* Enter scores */}
+        <form onSubmit={submitTurn} style={{ marginTop: 10 }}>
+          <p>Enter scores for 3 darts (0–60 or "bull"):</p>
+          {darts.map((dart, i) => (
+            <input
+              key={i}
+              ref={dartRefs[i]}
+              type="text"
+              value={dart}
+              onChange={(e) => setDarts(darts.map((d, idx) => (idx === i ? e.target.value : d)))}
+              style={{ marginRight: "6px", width: "70px", textAlign: "center", padding: "6px 4px" }}
+            />
+          ))}
+          <button type="submit" style={{ padding: "8px 12px", cursor: "pointer", marginLeft: 10 }}>Submit Turn</button>
+        </form>
+
+        {/* Keypad */}
+        <p>Entering dart {currentDart + 1} of 3</p>
+        <div style={{ marginTop: 20, textAlign: "center" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "8px" }}>
+            {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map((num) => (
+              <button key={num} onClick={() => handleKeypadPress(num)} style={{ padding: "10px", fontSize: "1.1rem", cursor: "pointer" }}>
+                {num}
+              </button>
+            ))}
+          </div>
+
+          {/* Bottom row */}
+          <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+            <button onClick={() => handleKeypadPress(25)} style={{ padding: "12px 0", fontSize: "1rem", cursor: "pointer" }}>Outer Bull</button>
+            <button onClick={() => handleKeypadPress("Bull")} style={{ padding: "12px 0", fontSize: "1rem", cursor: "pointer" }}>Bull</button>
+            <button onClick={selectDouble} style={{ padding: "12px 0", fontSize: "1rem", cursor: "pointer", background: multiplier === 2 ? "#d0f0d0" : "#f0f0f0" }}>Double</button>
+            <button onClick={selectTriple} style={{ padding: "12px 0", fontSize: "1rem", cursor: "pointer", background: multiplier === 3 ? "#d0f0d0" : "#f0f0f0" }}>Triple</button>
           </div>
         </div>
-      )}
-    <audio ref={audioRef} src="/fulltitlesong.mp3" preload="auto" loop muted/>
 
-    </div>
-  );
+        {/* Undo / Start New Game */}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "15px", marginTop: "25px", flexWrap: "wrap" }}>
+          {previousState && (
+            <button onClick={undoTurn} style={{ backgroundColor: "#fff3b0", padding: "10px 18px", borderRadius: "6px", border: "1px solid #ccc", cursor: "pointer", fontWeight: "bold" }}>
+              ⬅️ Undo Last Turn
+            </button>
+          )}
+          <button onClick={startNewGame} style={{ backgroundColor: "#e0e0e0", padding: "10px 18px", borderRadius: "6px", border: "1px solid #ccc", cursor: "pointer", fontWeight: "bold" }}>
+            🔄 Start New Game
+          </button>
+        </div>
+      </div>
+        </div>
+
+        {/* Audio element */}
+        <audio ref={audioRef} src="/fulltitlesong.mp3" preload="auto" loop />
+      </>
+    )}
+  </div>
+);
 }
