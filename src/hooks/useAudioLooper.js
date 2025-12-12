@@ -1,13 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 
-/**
- * Plays a full audio track, then crossfades into a looping track indefinitely.
- * Supports start-on-demand and global mute.
- *
- * @param {string} fullSrc - URL of full intro audio
- * @param {string} loopSrc - URL of looping audio
- * @param {number} fadeTime - crossfade time in seconds
- */
 export default function useAudioLooper(fullSrc, loopSrc, fadeTime = 10) {
   const fullRef = useRef(null);
   const loopRef = useRef(null);
@@ -15,7 +7,6 @@ export default function useAudioLooper(fullSrc, loopSrc, fadeTime = 10) {
   const loopTimeouts = useRef([]);
   const [muted, setMutedState] = useState(false);
 
-  // Helper: fade audio volume
   const fade = (audio, targetVol, duration) => {
     const steps = 20;
     const stepTime = (duration * 1000) / steps;
@@ -36,7 +27,6 @@ export default function useAudioLooper(fullSrc, loopSrc, fadeTime = 10) {
     loopTimeouts.current = [];
   };
 
-  // Core: schedule crossfade from full -> loop
   const scheduleLoopFade = useCallback(() => {
     const fullAudio = fullRef.current;
     const loopAudio = loopRef.current;
@@ -49,7 +39,6 @@ export default function useAudioLooper(fullSrc, loopSrc, fadeTime = 10) {
       fade(fullAudio, 0, fadeTime);
       fade(loopAudio, 1, fadeTime);
 
-      // Repeat looping with crossfade
       const loopSchedule = () => {
         const timeout2 = setTimeout(() => {
           const newLoop = loopAudio.cloneNode();
@@ -69,7 +58,6 @@ export default function useAudioLooper(fullSrc, loopSrc, fadeTime = 10) {
     loopTimeouts.current.push(timeout);
   }, [fadeTime]);
 
-  // Start audio on demand
   const start = useCallback(() => {
     const fullAudio = fullRef.current;
     const loopAudio = loopRef.current;
@@ -83,7 +71,6 @@ export default function useAudioLooper(fullSrc, loopSrc, fadeTime = 10) {
     else fullAudio.onloadedmetadata = scheduleLoopFade;
   }, [muted, scheduleLoopFade]);
 
-  // Mute control
   const setMuted = useCallback(
     (value) => {
       setMutedState(value);
@@ -93,7 +80,6 @@ export default function useAudioLooper(fullSrc, loopSrc, fadeTime = 10) {
     [fullRef, loopRef]
   );
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       clearAllTimers();

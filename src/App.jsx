@@ -10,12 +10,13 @@ export default function App() {
   const [lastScore, setLastScore] = useState(0);
   const [darts, setDarts] = useState(["", "", ""]);
   const [round, setRound] = useState(1);
-  const [previousState, setPreviousState] = useState(null); // for undo
+  const [undoStack, setUndoStack] = useState([]); // last 20 dart snapshots
   const [winner, setWinner] = useState(null); // for winner screen
   const [isMuted, setIsMuted] = useState(true);
   const audioRef = useRef(null);
   const [multiplier, setMultiplier] = useState(1);
   const [currentDart, setCurrentDart] = useState(0);
+  const MAX_UNDO = 20;
 
 
 
@@ -79,21 +80,72 @@ useEffect(() => {
   };
 
 
-// ===== Mute / Unmute function =====
-const toggleMute = () => {
-  if (audioRef.current) {
-    const newMutedState = !isMuted;
-    audioRef.current.muted = newMutedState;
-    setIsMuted(newMutedState);
+  // ===== Mute / Unmute function =====
+  const toggleMute = () => {
+    if (audioRef.current) {
+      const newMutedState = !isMuted;
+      audioRef.current.muted = newMutedState;
+      setIsMuted(newMutedState);
 
-    if (!newMutedState) {
-      // unmuting: ensure playback resumes
-      audioRef.current.play().catch((err) => {
-        console.warn("Audio play failed after unmute:", err);
-      });
+      if (!newMutedState) {
+        // unmuting: ensure playback resumes
+        audioRef.current.play().catch((err) => {
+          console.warn("Audio play failed after unmute:", err);
+        });
+      }
     }
-  }
-};
+  };
+
+  // ===== Undo helpers =====
+  const snapshotState = (overrides = {}) => ({
+    players: JSON.parse(JSON.stringify(players)),
+    currentPlayerIndex,
+    lastScore,
+    round,
+    darts: [...darts],
+    currentDart,
+    multiplier,
+    gameStarted,
+    winner,
+    ...overrides,
+  });
+
+  const isStartOfTurn = (dartsState, dartIndex) =>
+    dartsState.every((d) => !d) && dartIndex === 0;
+
+  const dartsEqual = (a, b) => a.length === b.length && a.every((d, i) => d === b[i]);
+
+  const dartValueToNumber = (d) => {
+    if (!d) return 0;
+    if (typeof d === "string" && d.toLowerCase() === "bull") return 50;
+    const val = Number(d);
+    return isNaN(val) ? 0 : val;
+  };
+
+  const calculateScore = (values) => values.reduce((acc, d) => acc + dartValueToNumber(d), 0);
+
+  const pushUndoState = (overrides = {}) => {
+    const safeOverrides = { ...overrides };
+    if (overrides.darts) safeOverrides.darts = [...overrides.darts];
+    if (overrides.players) safeOverrides.players = JSON.parse(JSON.stringify(overrides.players));
+    const snapshot = snapshotState(safeOverrides);
+    setUndoStack((stack) => {
+      const next = [...stack, snapshot];
+      return next.slice(-MAX_UNDO);
+    });
+  };
+
+  const restoreSnapshot = (snapshot) => {
+    setPlayers(snapshot.players);
+    setCurrentPlayerIndex(snapshot.currentPlayerIndex);
+    setLastScore(snapshot.lastScore);
+    setRound(snapshot.round);
+    setDarts(snapshot.darts);
+    setCurrentDart(snapshot.currentDart);
+    setMultiplier(1); // reset any double/triple after undo
+    setWinner(snapshot.winner || null);
+    setGameStarted(snapshot.gameStarted);
+  };
 
 
 
@@ -122,6 +174,11 @@ const toggleMute = () => {
 
   // ===== Keypad logic =====  
   const handleKeypadPress = (value) => {
+    if (!gameStarted) return;
+
+    const targetIndex = currentDart;
+    const hasHistory = undoStack.length > 0;
+
     let dartValue = "";
 
     if (value === "Bull") {
@@ -130,17 +187,23 @@ const toggleMute = () => {
       dartValue = value * multiplier;
     }
 
-    const newDarts = [...darts];
-    newDarts[currentDart] = dartValue.toString();
-    setDarts(newDarts);
+    const dartString = dartValue.toString();
+
+    setDarts((prev) => {
+      const skipSnapshot = hasHistory && isStartOfTurn(prev, targetIndex);
+      if (!skipSnapshot) {
+        pushUndoState({ darts: prev, currentDart: targetIndex, multiplier });
+      }
+      const updated = [...prev];
+      updated[targetIndex] = dartString;
+      return updated;
+    });
 
     // Reset multiplier after each dart
     setMultiplier(1);
 
     // Move to next dart if available
-    if (currentDart < 2) {
-      setCurrentDart(currentDart + 1);
-    }
+    setCurrentDart((idx) => (idx < 2 ? idx + 1 : 2));
   };
 
   const selectDouble = () => setMultiplier(2);
@@ -162,28 +225,21 @@ const toggleMute = () => {
     setLastScore(0);
     setDarts(["", "", ""]);
     setCurrentPlayerIndex(0);
-    setPreviousState(null);
+    setUndoStack([]);
+    setCurrentDart(0);
+    setMultiplier(1);
   };
 
   // ===== Submit Turn =====
   const submitTurn = (e) => {
     if (e) e.preventDefault();
 
-    // Save state for undo (deep clone)
-    setPreviousState({
-      players: JSON.parse(JSON.stringify(players)),
-      currentPlayerIndex,
-      lastScore,
-      round,
-    });
+    if (darts.some((d) => d !== "")) {
+      pushUndoState();
+    }
 
     const currentPlayer = { ...players[currentPlayerIndex] };
-    const score = darts.reduce((acc, d) => {
-      if (!d) return acc;
-      if (typeof d === "string" && d.toLowerCase() === "bull") return acc + 50;
-      const val = Number(d);
-      return acc + (isNaN(val) ? 0 : val);
-    }, 0);
+    const score = calculateScore(darts);
 
     const bullseyes = darts.filter((d) => typeof d === "string" && d.toLowerCase() === "bull").length;
 
@@ -219,41 +275,58 @@ const toggleMute = () => {
 
   };
 
-  // ===== Undo Turn =====
-  const undoTurn = () => {
-    if (!previousState) return;
-    setPlayers(previousState.players);
-    setCurrentPlayerIndex(previousState.currentPlayerIndex);
-    setLastScore(previousState.lastScore);
-    setRound(previousState.round);
-    setDarts(["", "", ""]);
-    setPreviousState(null);
-    setWinner(null);
-    setGameStarted(true);
-    setCurrentDart(0);
-    setMultiplier(1);
+  // ===== Undo Dart =====
+  const undoLastDart = () => {
+    setUndoStack((stack) => {
+      if (stack.length === 0) return stack;
 
+      let next = [...stack];
+      let previous = null;
+
+      // Pop until we find a snapshot that differs from the current view
+      while (next.length > 0) {
+        const candidate = next[next.length - 1];
+        next.pop();
+        const dartsChanged = !dartsEqual(candidate.darts, darts);
+        const playerChanged = candidate.currentPlayerIndex !== currentPlayerIndex;
+        const roundChanged = candidate.round !== round;
+
+        if (dartsChanged || playerChanged || roundChanged) {
+          previous = candidate;
+          break;
+        }
+      }
+
+      if (previous) {
+        restoreSnapshot(previous);
+      }
+
+      return next;
+    });
   };
 
   // ===== Start New Game =====
-const startNewGame = () => {
-  // If a game is currently running, ask for confirmation
-  if (gameStarted) {
-    const confirmRestart = window.confirm(
-      "Are you sure you want to restart and lose current game data?"
-    );
-    if (!confirmRestart) return; // cancel if user says no
-  }
+  const startNewGame = () => {
+    // If a game is currently running, ask for confirmation
+    if (gameStarted) {
+      const confirmRestart = window.confirm(
+        "Are you sure you want to restart and lose current game data?"
+      );
+      if (!confirmRestart) return; // cancel if user says no
+    }
 
-  // Reset all game states
-  setGameStarted(false);
-  setPlayers([]);
-  setLastScore(0);
-  setRound(1);
-  setDarts(["", "", ""]);
-  setPreviousState(null);
-  setWinner(null);
-};
+    // Reset all game states
+    setGameStarted(false);
+    setPlayers([]);
+    setLastScore(0);
+    setRound(1);
+    setDarts(["", "", ""]);
+    setWinner(null);
+    setCurrentPlayerIndex(0);
+    setUndoStack([]);
+    setCurrentDart(0);
+    setMultiplier(1);
+  };
 
 
   // ===== Heart display (up to 6) =====
@@ -261,6 +334,10 @@ const startNewGame = () => {
     const capped = Math.max(0, Math.min(6, lives));
     return "❤️".repeat(capped);
   };
+
+  const currentTurnScore = calculateScore(darts);
+  const hasDartThrown = darts.some((d) => d !== "");
+  const pointsLeft = lastScore - currentTurnScore;
 
   // ===== Winner Screen =====
   if (winner) {
@@ -457,33 +534,59 @@ return (
           Current Player: <span style={{ fontWeight: "bold" }}>{players[currentPlayerIndex].name}</span> (Lives: {players[currentPlayerIndex].lives})
         </h3>
 
-        {/* Score to Beat */}
-        <p style={{ marginTop: "10px", fontSize: "16px" }}>
-          <strong>Score to beat:</strong> {lastScore}
-        </p>
+        {/* Score Summary */}
+        <div
+          style={{
+            marginTop: "12px",
+            padding: "12px 14px",
+            border: "1px solid #ddd",
+            borderRadius: "8px",
+            background: "#f8f8f8",
+            maxWidth: "380px",
+          }}
+        >
+          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", rowGap: "8px", columnGap: "12px", alignItems: "center" }}>
+            <div style={{ fontWeight: "600" }}>Score to beat</div>
+            <div style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{lastScore}</div>
+
+            <div style={{ fontWeight: "600" }}>Current score</div>
+            <div style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+              {hasDartThrown ? currentTurnScore : "—"}
+            </div>
+
+            <div style={{ fontWeight: "600" }}>Points left to score</div>
+            <div style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", color: pointsLeft < 0 ? "#2d7a2d" : "#000" }}>
+              {hasDartThrown ? (
+                pointsLeft >= 0 ? pointsLeft : `New high score: ${currentTurnScore}`
+              ) : (
+                "—"
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Enter scores */}
         <form onSubmit={submitTurn} style={{ marginTop: 10 }}>
-          <p>Enter scores for 3 darts (0–60 or "bull"):</p>
-          {darts.map((dart, i) => (
-            <input
-              key={i}
-              ref={dartRefs[i]}
-              type="text"
-              value={dart}
-              onChange={(e) => setDarts(darts.map((d, idx) => (idx === i ? e.target.value : d)))}
-              style={{ marginRight: "6px", width: "70px", textAlign: "center", padding: "6px 4px" }}
-            />
-          ))}
-          <button type="submit" style={{ padding: "8px 12px", cursor: "pointer", marginLeft: 10 }}>Submit Turn</button>
-        </form>
+          <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "8px" }}>
+            {darts.map((dart, i) => (
+              <input
+                key={i}
+                ref={dartRefs[i]}
+                type="text"
+                value={dart}
+                readOnly
+                onClick={() => setCurrentDart(i)}
+                style={{ width: "70px", textAlign: "center", padding: "6px 4px", backgroundColor: "#f7f7f7", cursor: "pointer" }}
+              />
+            ))}
+          </div>
 
         {/* Keypad */}
         <p>Entering dart {currentDart + 1} of 3</p>
         <div style={{ marginTop: 20, textAlign: "center" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "8px" }}>
             {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].map((num) => (
-              <button key={num} onClick={() => handleKeypadPress(num)} style={{ padding: "10px", fontSize: "1.1rem", cursor: "pointer" }}>
+              <button type="button" key={num} onClick={() => handleKeypadPress(num)} style={{ padding: "10px", fontSize: "1.1rem", cursor: "pointer" }}>
                 {num}
               </button>
             ))}
@@ -491,24 +594,66 @@ return (
 
           {/* Bottom row */}
           <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
-            <button onClick={() => handleKeypadPress(25)} style={{ padding: "12px 0", fontSize: "1rem", cursor: "pointer" }}>Outer Bull</button>
-            <button onClick={() => handleKeypadPress("Bull")} style={{ padding: "12px 0", fontSize: "1rem", cursor: "pointer" }}>Bull</button>
-            <button onClick={selectDouble} style={{ padding: "12px 0", fontSize: "1rem", cursor: "pointer", background: multiplier === 2 ? "#d0f0d0" : "#f0f0f0" }}>Double</button>
-            <button onClick={selectTriple} style={{ padding: "12px 0", fontSize: "1rem", cursor: "pointer", background: multiplier === 3 ? "#d0f0d0" : "#f0f0f0" }}>Triple</button>
+            <button type="button" onClick={() => handleKeypadPress(25)} style={{ padding: "12px 0", fontSize: "1rem", cursor: "pointer" }}>Outer Bull</button>
+            <button type="button" onClick={() => handleKeypadPress("Bull")} style={{ padding: "12px 0", fontSize: "1rem", cursor: "pointer" }}>Bull</button>
+            <button type="button" onClick={selectDouble} style={{ padding: "12px 0", fontSize: "1rem", cursor: "pointer", background: multiplier === 2 ? "#d0f0d0" : "#f0f0f0" }}>Double</button>
+            <button type="button" onClick={selectTriple} style={{ padding: "12px 0", fontSize: "1rem", cursor: "pointer", background: multiplier === 3 ? "#d0f0d0" : "#f0f0f0" }}>Triple</button>
           </div>
         </div>
 
-        {/* Undo / Start New Game */}
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "15px", marginTop: "25px", flexWrap: "wrap" }}>
-          {previousState && (
-            <button onClick={undoTurn} style={{ backgroundColor: "#fff3b0", padding: "10px 18px", borderRadius: "6px", border: "1px solid #ccc", cursor: "pointer", fontWeight: "bold" }}>
-              ⬅️ Undo Last Turn
+        {/* Submit / Undo row */}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", marginTop: "20px", flexWrap: "wrap" }}>
+          <button
+            type="submit"
+            style={{
+              padding: "12px 22px",
+              cursor: "pointer",
+              fontWeight: "bold",
+              fontSize: "1rem",
+              minWidth: "180px",
+              flex: 2,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              gap: "8px",
+              backgroundColor: "#c2f0c2",
+              border: "1px solid #7acb7a",
+              borderRadius: "6px",
+            }}
+          >
+            <span role="img" aria-label="check">✔️</span> Submit Turn
+          </button>
+          {undoStack.length > 0 && (
+            <button
+              type="button"
+              onClick={undoLastDart}
+              style={{
+                backgroundColor: "#e6e6e6",
+                padding: "10px 14px",
+                borderRadius: "6px",
+                border: "1px solid #ccc",
+                cursor: "pointer",
+                fontWeight: "bold",
+                flex: 1,
+                minWidth: "120px",
+              }}
+            >
+              ⬅️ Undo
             </button>
           )}
-          <button onClick={startNewGame} style={{ backgroundColor: "#e0e0e0", padding: "10px 18px", borderRadius: "6px", border: "1px solid #ccc", cursor: "pointer", fontWeight: "bold" }}>
+        </div>
+
+        {/* Start new game row */}
+        <div style={{ display: "flex", justifyContent: "center", marginTop: "12px" }}>
+          <button
+            type="button"
+            onClick={startNewGame}
+            style={{ backgroundColor: "#e0e0e0", padding: "10px 18px", borderRadius: "6px", border: "1px solid #ccc", cursor: "pointer", fontWeight: "bold" }}
+          >
             🔄 Start New Game
           </button>
         </div>
+        </form>
       </div>
         </div>
 
