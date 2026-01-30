@@ -364,7 +364,7 @@ useEffect(() => {
           loop={false}
           muted={false}
           controls
-          style={{ maxWidth: "90%", marginTop: 20, borderRadius: 8 }}
+          style={{ maxWidth: "90%", maxHeight: "65%", marginTop: 20, borderRadius: 8 }}
         />
 
         <button
