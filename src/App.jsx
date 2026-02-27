@@ -359,7 +359,7 @@ useEffect(() => {
         <p style={{ fontSize: "1.5rem", marginTop: 6 }}>{renderHearts(winner.lives)}</p>
 
         <video
-          src="/HendrikWins.mp4"
+          src="/LanderWins.mp4"
           autoPlay
           loop={false}
           muted={false}
